@@ -52,7 +52,7 @@ A robust, easy-to-use Point of Sale (POS) and billing application built with Pyt
 
 1.  **Clone the Repository**
     ```bash
-    git clone https://github.com/yourusername/thangam-billing.git
+    git clone https://github.com/SZE477/billing-software
     cd thangam-billing
     ```
 

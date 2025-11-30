@@ -3,7 +3,8 @@ from PyQt6.QtWidgets import (
     QDateEdit, QPushButton, QLabel, QHeaderView
 )
 from PyQt6.QtCore import QDate, Qt
-from app.db import get_db_connection
+from app.db import get_db
+from app.orm_models import Bill, Customer
 
 from app.ui_styles import TOTAL_LABEL_STYLE
 
@@ -62,14 +63,12 @@ class ReportsDialog(QDialog):
         start_ts = f"{start} 00:00:00"
         end_ts = f"{end} 23:59:59"
 
-        conn = get_db_connection()
-        bills = conn.execute('''
-            SELECT b.*, c.name as customer_name 
-            FROM bills b 
-            LEFT JOIN customers c ON b.customer_id = c.id
-            WHERE date_time BETWEEN ? AND ?
-        ''', (start_ts, end_ts)).fetchall()
-        conn.close()
+        session = get_db()
+        try:
+            bills_orm = session.query(Bill).filter(Bill.date_time.between(start_ts, end_ts)).all()
+            bills = [b.to_dict() for b in bills_orm]
+        finally:
+            session.close()
 
         self.table.setRowCount(len(bills))
         total_sales = 0
