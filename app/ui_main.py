@@ -1,4 +1,5 @@
 import sys
+from datetime import datetime
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, 
     QTableWidgetItem, QLineEdit, QLabel, QPushButton, QComboBox, 
@@ -14,49 +15,10 @@ from app.printer import PrinterManager
 from app.ui_settings import SettingsDialog
 from app.ui_reports import ReportsDialog
 from app.ui_error_handler import show_error, show_info
-from app.ui_error_handler import show_error, show_info
+from app.ui_products import ManageProductsDialog
+from app.ui_preview import BillPreviewDialog
 
-class ProductDialog(QDialog):
-    def __init__(self, parent=None, product=None):
-        super().__init__(parent)
-        self.setWindowTitle("Add/Edit Product")
-        self.product = product
-        self.init_ui()
 
-    def init_ui(self):
-        layout = QFormLayout()
-        self.name = QLineEdit(self.product['name'] if self.product else "")
-        self.code = QLineEdit(self.product['code'] if self.product else "")
-        self.unit = QComboBox()
-        self.unit.addItems(["kg", "g", "litre", "ml", "pc"])
-        if self.product: self.unit.setCurrentText(self.product['base_unit'])
-        
-        self.price = QLineEdit(str(self.product['price_per_unit']) if self.product else "")
-        self.category = QLineEdit(self.product['category'] if self.product else "General")
-
-        layout.addRow("Name:", self.name)
-        layout.addRow("Code:", self.code)
-        layout.addRow("Base Unit:", self.unit)
-        layout.addRow("Price:", self.price)
-        layout.addRow("Category:", self.category)
-
-        btn_save = QPushButton("Save")
-        btn_save.clicked.connect(self.save_product)
-        layout.addRow(btn_save)
-        self.setLayout(layout)
-
-    def save_product(self):
-        try:
-            price = float(self.price.text())
-            if self.product:
-                ProductModel.update_product(self.product['id'], self.name.text(), self.code.text(), 
-                                          self.unit.currentText(), price, self.category.text())
-            else:
-                ProductModel.add_product(self.name.text(), self.code.text(), 
-                                       self.unit.currentText(), price, self.category.text())
-            self.accept()
-        except ValueError:
-            show_error(self, "Input Error", "Price must be a number.")
 
 class CustomerDialog(QDialog):
     def __init__(self, parent=None):
@@ -95,6 +57,7 @@ class CustomerDialog(QDialog):
 class PaymentDialog(QDialog):
     def __init__(self, parent=None, total=0.0):
         super().__init__(parent)
+        self.main_window = parent
         self.setWindowTitle("Payment")
         self.total = total
         self.payment_method = "Cash"
@@ -108,7 +71,7 @@ class PaymentDialog(QDialog):
         layout.addWidget(lbl_total)
 
         self.method = QComboBox()
-        self.method.addItems(["Cash", "UPI", "Card"])
+        self.method.addItems(["Cash", "UPI", "Card", "Debt"])
         layout.addWidget(self.method)
 
         btn_pay = QPushButton("Complete Payment")
@@ -119,7 +82,29 @@ class PaymentDialog(QDialog):
 
     def complete_payment(self):
         self.payment_method = self.method.currentText()
-        self.accept()
+        
+        if self.payment_method == "Debt":
+            if not self.main_window.current_customer:
+                reply = QMessageBox.question(self, "Customer Required", 
+                                           "Debt payment requires a registered customer. Do you want to add one now?",
+                                           QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                
+                if reply == QMessageBox.StandardButton.Yes:
+                    dlg = CustomerDialog(self)
+                    if dlg.exec():
+                        # Update MainWindow with new customer
+                        self.main_window.current_customer = {'id': dlg.customer_id, 'name': dlg.customer_name}
+                        self.main_window.lbl_cust.setText(f"{dlg.customer_name}")
+                        self.main_window.load_customers()
+                        self.accept()
+                    else:
+                        return # User cancelled customer creation
+                else:
+                    return # User refused to add customer
+            else:
+                self.accept()
+        else:
+            self.accept()
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -232,8 +217,15 @@ class MainWindow(QMainWindow):
         self.lbl_subtotal.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.lbl_tax = QLabel("0.00")
         self.lbl_tax.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self.lbl_discount = QLabel("0.00")
-        self.lbl_discount.setAlignment(Qt.AlignmentFlag.AlignRight)
+        
+        self.discount_input = QLineEdit("0")
+        self.discount_input.setPlaceholderText("%")
+        self.discount_input.setFixedWidth(50)
+        self.discount_input.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.discount_input.textChanged.connect(self.update_cart_table)
+        
+        self.lbl_discount_amt = QLabel("0.00")
+        self.lbl_discount_amt.setAlignment(Qt.AlignmentFlag.AlignRight)
         
         self.lbl_grand_total = QLabel("₹0.00")
         self.lbl_grand_total.setAlignment(Qt.AlignmentFlag.AlignRight)
@@ -241,7 +233,8 @@ class MainWindow(QMainWindow):
         
         totals_layout.addRow("Subtotal:", self.lbl_subtotal)
         totals_layout.addRow("Tax:", self.lbl_tax)
-        totals_layout.addRow("Discount:", self.lbl_discount)
+        totals_layout.addRow("Discount (%):", self.discount_input)
+        totals_layout.addRow("Discount Amt:", self.lbl_discount_amt)
         totals_layout.addRow("Grand Total:", self.lbl_grand_total)
         billing_layout.addWidget(totals_frame)
 
@@ -433,7 +426,18 @@ class MainWindow(QMainWindow):
             subtotal += item['total']
         
         self.lbl_subtotal.setText(f"₹{subtotal:.2f}")
-        self.lbl_grand_total.setText(f"₹{subtotal:.2f}")
+        
+        # Calculate Discount
+        try:
+            disc_percent = float(self.discount_input.text())
+        except ValueError:
+            disc_percent = 0.0
+            
+        discount_amount = (subtotal * disc_percent) / 100
+        self.lbl_discount_amt.setText(f"₹{discount_amount:.2f}")
+        
+        grand_total = subtotal - discount_amount
+        self.lbl_grand_total.setText(f"₹{grand_total:.2f}")
         self.table.blockSignals(False)
 
     def on_cart_item_changed(self, row, column):
@@ -465,31 +469,32 @@ class MainWindow(QMainWindow):
             show_error(self, "Empty Cart", "Add items to cart first.")
             return
 
-        grand_total = float(self.lbl_grand_total.text())
+        grand_total = float(self.lbl_grand_total.text().replace('₹', ''))
         dlg = PaymentDialog(self, grand_total)
         if dlg.exec():
             bill_data = {
                 'bill_number': generate_bill_number(),
                 'customer_id': self.current_customer['id'] if self.current_customer else None,
-                'subtotal': float(self.lbl_subtotal.text()),
+                'subtotal': float(self.lbl_subtotal.text().replace('₹', '')),
                 'grand_total': grand_total,
+                'discount_amount': float(self.lbl_discount_amt.text().replace('₹', '')),
                 'payment_method': dlg.payment_method,
-                'date_time': "Now" # Placeholder, DB handles actual time
+                'customer_name': self.current_customer['name'] if self.current_customer else "Walk-in Customer",
+                'customer_phone': self.current_customer['phone'] if self.current_customer else "",
+                'date_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
             
             try:
                 # Save to DB
                 BillModel.create_bill(bill_data, self.cart)
                 
-                # Print
-                try:
-                    self.printer_manager.print_receipt(bill_data, self.cart)
-                except Exception as e:
-                    show_error(self, "Printing Error", f"Bill saved but print failed: {e}")
+                # Show Preview & Print
+                preview_dlg = BillPreviewDialog(self, bill_data, self.cart, self.printer_manager)
+                preview_dlg.exec()
 
                 self.clear_cart()
                 self.load_recent_bills()
-                show_info(self, "Success", "Bill processed successfully!")
+                # show_info(self, "Success", "Bill processed successfully!") # Preview dialog handles success msg if printed
             except Exception as e:
                 show_error(self, "Error", f"Failed to process bill: {e}")
 
@@ -506,5 +511,5 @@ class MainWindow(QMainWindow):
         ReportsDialog(self).exec()
 
     def open_product_dialog(self):
-        ProductDialog(self).exec()
+        ManageProductsDialog(self).exec()
         self.load_products()

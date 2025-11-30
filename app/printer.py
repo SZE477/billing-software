@@ -69,6 +69,9 @@ class PrinterManager:
             self.printer.text(f"{store_address}\n")
             self.printer.text(f"Date: {bill_data['date_time']}\n")
             self.printer.text(f"Bill No: {bill_data['bill_number']}\n")
+            self.printer.text(f"Customer: {bill_data.get('customer_name', 'Walk-in')}\n")
+            if bill_data.get('customer_phone'):
+                self.printer.text(f"Phone: {bill_data['customer_phone']}\n")
             self.printer.text("-" * 32 + "\n")
             self.printer.text(f"{'Item':<16} {'Qty':<5} {'Price':<8}\n")
             self.printer.text("-" * 32 + "\n")
