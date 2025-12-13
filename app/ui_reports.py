@@ -30,12 +30,17 @@ class ReportsDialog(QDialog):
         btn_generate = QPushButton("Generate Report")
         btn_generate.setObjectName("primaryBtn")
         btn_generate.clicked.connect(self.generate_report)
+
+        btn_export = QPushButton("Export to Excel")
+        btn_export.setStyleSheet("background-color: #4CAF50; color: white;")
+        btn_export.clicked.connect(self.export_to_excel)
         
         filter_layout.addWidget(QLabel("Start Date:"))
         filter_layout.addWidget(self.start_date)
         filter_layout.addWidget(QLabel("End Date:"))
         filter_layout.addWidget(self.end_date)
         filter_layout.addWidget(btn_generate)
+        filter_layout.addWidget(btn_export)
         layout.addLayout(filter_layout)
 
         # Table
@@ -66,14 +71,14 @@ class ReportsDialog(QDialog):
         session = get_db()
         try:
             bills_orm = session.query(Bill).filter(Bill.date_time.between(start_ts, end_ts)).all()
-            bills = [b.to_dict() for b in bills_orm]
+            self.current_bills = [b.to_dict() for b in bills_orm]
         finally:
             session.close()
 
-        self.table.setRowCount(len(bills))
+        self.table.setRowCount(len(self.current_bills))
         total_sales = 0
 
-        for row, bill in enumerate(bills):
+        for row, bill in enumerate(self.current_bills):
             self.table.setItem(row, 0, QTableWidgetItem(bill['date_time']))
             self.table.setItem(row, 1, QTableWidgetItem(bill['bill_number']))
             self.table.setItem(row, 2, QTableWidgetItem(bill['customer_name'] or "Walk-in"))
@@ -82,3 +87,35 @@ class ReportsDialog(QDialog):
             total_sales += bill['grand_total']
 
         self.lbl_total_sales.setText(f"Total Sales: ₹{total_sales:.2f}")
+
+    def export_to_excel(self):
+        if not hasattr(self, 'current_bills') or not self.current_bills:
+            from app.ui_error_handler import show_error
+            show_error(self, "No Data", "Generate a report first.")
+            return
+
+        from PyQt6.QtWidgets import QFileDialog
+        import pandas as pd
+        import os
+
+        filename, _ = QFileDialog.getSaveFileName(self, "Save Excel", "", "Excel Files (*.xlsx)")
+        if filename:
+            if not filename.endswith('.xlsx'):
+                filename += '.xlsx'
+            
+            try:
+                df = pd.DataFrame(self.current_bills)
+                # Select and rename columns for better report
+                cols = ['date_time', 'bill_number', 'customer_name', 'payment_method', 'grand_total']
+                df = df[cols]
+                df.columns = ['Date', 'Bill No', 'Customer', 'Payment Method', 'Total']
+                
+                df.to_excel(filename, index=False)
+                from app.ui_error_handler import show_info
+                show_info(self, "Success", f"Report saved to {filename}")
+                
+                # Auto open
+                os.startfile(filename) # Windows only
+            except Exception as e:
+                from app.ui_error_handler import show_error
+                show_error(self, "Export Error", str(e))

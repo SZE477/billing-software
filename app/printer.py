@@ -10,6 +10,14 @@ from escpos.printer import Usb, Serial, Network, Dummy
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
+from reportlab.graphics.barcode import code128
+from reportlab.graphics.shapes import Drawing
+from reportlab.graphics import renderPDF
+try:
+    import win32api
+    import win32print
+except ImportError:
+    pass
 
 from app.utils.logger import error_logger, transaction_logger
 from app.utils.exceptions import PrinterError
@@ -387,10 +395,26 @@ public class RawPrinter {{
             y = height - 50 * mm
 
             store_name = SettingsModel.get_setting('store_name', 'Thangam Stores')
+            header_message = SettingsModel.get_setting('header_message', '')
+            logo_path = SettingsModel.get_setting('shop_logo_path', '')
             
+            # Logo
+            if logo_path and os.path.exists(logo_path):
+                try:
+                    # Draw logo at top center, 20mm high
+                    c.drawImage(logo_path, width/2 - 25*mm, y, width=50*mm, height=20*mm, preserveAspectRatio=True)
+                    y -= 25*mm # Move down
+                except Exception:
+                    pass
+
             c.setFont("Helvetica-Bold", 16)
-            c.drawString(20*mm, y, store_name)
-            y -= 10*mm
+            c.drawCentredString(width/2, y, store_name)
+            y -= 8*mm
+            
+            if header_message:
+                c.setFont("Helvetica-Oblique", 10)
+                c.drawCentredString(width/2, y, header_message)
+                y -= 8*mm
             
             c.setFont("Helvetica", 12)
             c.drawString(20*mm, y, f"Bill No: {bill_data['bill_number']}")
@@ -446,7 +470,96 @@ public class RawPrinter {{
             return True
         except Exception as e:
             error_logger.error(f"Email failed: {e}")
+            error_logger.error(f"Email failed: {e}")
             raise PrinterError(f"Failed to send email: {e}")
+
+    def print_barcode_label(self, product_data, count=1):
+        """Generates and prints barcode labels for a product."""
+        printer_name = SettingsModel.get_setting('windows_printer_name', '')
+        if not printer_name:
+            # Fallback to default if not set? OR just error. 
+            # For now, let's try to get default if empty, or error.
+            # actually win32print.GetDefaultPrinter() could work.
+            try:
+                printer_name = win32print.GetDefaultPrinter()
+            except:
+                raise PrinterError("No printer configured and no default printer found.")
+
+        try:
+            # Label size: 50mm x 25mm (Standard small label)
+            # You might want to make this configurable in the future
+            label_width = 50 * mm
+            label_height = 25 * mm
+            
+            # Temporary file for the label
+            temp_file = os.path.join(tempfile.gettempdir(), f"label_{product_data.get('code', 'ukn')}.pdf")
+            
+            c = canvas.Canvas(temp_file, pagesize=(label_width, label_height))
+            
+            store_name = SettingsModel.get_setting('store_name', 'Thangam Stores')
+            price = product_data.get('price_per_unit', 0.0)
+            name = product_data.get('name', 'Product')
+            code = product_data.get('code', '')
+            if not code:
+                code = f"P{product_data.get('id')}" # Fallback internal code
+            
+            # Draw content
+            # Store Name (Top, small)
+            c.setFont("Helvetica-Bold", 6)
+            c.drawCentredString(label_width / 2, label_height - 3*mm, store_name[:20])
+            
+            # Product Name (Below Store Name)
+            c.setFont("Helvetica", 8)
+            c.drawCentredString(label_width / 2, label_height - 6*mm, name[:20])
+            
+            # Barcode
+            # reportlab barcode flow
+            barcode = code128.Code128(code, barHeight=6*mm, barWidth=0.8) # Adjust barWidth to fit
+            # We need to draw it on the canvas. 
+            # Code128 width depends on data length.
+            # Center it effectively
+            # barcode.drawOn(c, x, y)
+             
+            # Calculate x to center (approx) - Code128 doesn't easily give width before drawing without render
+            # But we can just try drawing it at a safe margin
+            barcode_drawing = Drawing(label_width, 10*mm)
+            barcode_drawing.add(barcode)
+            # The barcode object itself handles x,y in its own coordinate system if we add it to Drawing?
+            # actually barcode.drawOn(c, x, y) is easier.
+            
+            # Let's estimate width or just place it at 2mm margin
+            barcode.drawOn(c, 2*mm, 8*mm)
+            
+            # Code Text (Human Readable)
+            c.setFont("Helvetica", 7)
+            c.drawCentredString(label_width / 2, 5*mm, code)
+            
+            # Price (Bottom Right or Centered)
+            c.setFont("Helvetica-Bold", 9)
+            c.drawCentredString(label_width / 2, 1.5*mm, f"Rs.{price:.2f}")
+            
+            c.showPage()
+            c.save()
+            
+            # Print 'count' copies
+            # Windows 'printto' verb prints to a specific printer
+            # But it usually prints ONE copy. To print multiple, we loop.
+            # NOTE: ShellExecute is async-ish and might open Adobe Reader.
+            # A better way for silent printing of PDF to specific printer is tricky in pure Python without calling external tools like Acrobat with flags or Ghostscript.
+            # However, for this task, 'os.startfile' or 'win32api.ShellExecute' is the standard "use system capabilities" way.
+            
+            for _ in range(count):
+                win32api.ShellExecute(0, "printto", temp_file, f'"{printer_name}"', ".", 0)
+                # Small delay to ensure order?
+                import time
+                time.sleep(1) 
+                
+            transaction_logger.info(f"Printed {count} labels for {name}")
+            return True
+
+        except Exception as e:
+            error_logger.error(f"Label printing failed: {e}")
+            raise PrinterError(f"Label printing failed: {e}")
 
     @staticmethod
     def list_usb_printers():

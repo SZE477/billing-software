@@ -1,9 +1,12 @@
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
-    QLineEdit, QPushButton, QHeaderView, QMessageBox, QFormLayout, QComboBox
+    QLineEdit, QPushButton, QHeaderView, QMessageBox, QFormLayout, QComboBox,
+    QLabel, QSpinBox
 )
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIntValidator
 from app.models import ProductModel
+from app.printer import PrinterManager
 from app.ui_error_handler import show_error, show_info
 
 class ProductDialog(QDialog):
@@ -48,11 +51,53 @@ class ProductDialog(QDialog):
         except ValueError:
             show_error(self, "Input Error", "Price must be a number.")
 
+class BarcodePrintDialog(QDialog):
+    def __init__(self, parent=None, product_name="Product"):
+        super().__init__(parent)
+        self.setWindowTitle("Print Labels")
+        self.resize(300, 150)
+        self.count = 1
+        self.init_ui(product_name)
+
+    def init_ui(self, product_name):
+        layout = QVBoxLayout()
+        
+        lbl_info = QLabel(f"Print labels for:\n{product_name}")
+        lbl_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_info.setStyleSheet("font-weight: bold; margin-bottom: 10px;")
+        layout.addWidget(lbl_info)
+        
+        form_layout = QHBoxLayout()
+        form_layout.addWidget(QLabel("Quantity:"))
+        self.spin_qty = QSpinBox()
+        self.spin_qty.setRange(1, 100)
+        self.spin_qty.setValue(1)
+        form_layout.addWidget(self.spin_qty)
+        layout.addLayout(form_layout)
+        
+        btn_layout = QHBoxLayout()
+        btn_print = QPushButton("🖨 Print")
+        btn_print.clicked.connect(self.confirm_print)
+        btn_cancel = QPushButton("Cancel")
+        btn_cancel.clicked.connect(self.reject)
+        
+        btn_layout.addWidget(btn_print)
+        btn_layout.addWidget(btn_cancel)
+        layout.addLayout(btn_layout)
+        
+        self.setLayout(layout)
+
+    def confirm_print(self):
+        self.count = self.spin_qty.value()
+        self.accept()
+
+
 class ManageProductsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Manage Products")
         self.resize(800, 600)
+        self.printer_manager = PrinterManager()
         self.init_ui()
         self.load_products()
 
@@ -87,11 +132,15 @@ class ManageProductsDialog(QDialog):
         btn_edit = QPushButton("Edit Selected")
         btn_edit.clicked.connect(self.edit_product)
         
+        btn_print = QPushButton("🖨 Print Label")
+        btn_print.clicked.connect(self.print_label)
+        
         btn_delete = QPushButton("Delete Selected")
         btn_delete.setObjectName("dangerBtn")
         btn_delete.clicked.connect(self.delete_product)
         
         action_layout.addStretch()
+        action_layout.addWidget(btn_print)
         action_layout.addWidget(btn_edit)
         action_layout.addWidget(btn_delete)
         layout.addLayout(action_layout)
@@ -151,3 +200,22 @@ class ManageProductsDialog(QDialog):
             product_id = int(self.table.item(row, 0).text())
             ProductModel.delete_product(product_id)
             self.load_products()
+
+    def print_label(self):
+        row = self.table.currentRow()
+        if row < 0:
+            show_info(self, "Selection", "Please select a product to print label.")
+            return
+
+        product_id = int(self.table.item(row, 0).text())
+        # Find product in local list
+        product = next((p for p in self.products if p['id'] == product_id), None)
+        
+        if product:
+            dlg = BarcodePrintDialog(self, product['name'])
+            if dlg.exec():
+                try:
+                    self.printer_manager.print_barcode_label(product, dlg.count)
+                    show_info(self, "Success", f"Sent {dlg.count} labels to printer.")
+                except Exception as e:
+                    show_error(self, "Printing Error", str(e))

@@ -259,6 +259,158 @@ class BillModel:
         finally:
             session.close()
 
+    @staticmethod
+    def get_sales_trends(days=30):
+        """Get daily sales sum for the last N days"""
+        session = get_db()
+        try:
+            from sqlalchemy import func
+            from datetime import datetime, timedelta
+            
+            # Calculate start date
+            start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+            
+            # SQLite specific: substr(date_time, 1, 10) extracts YYYY-MM-DD
+            results = session.query(
+                func.substr(Bill.date_time, 1, 10).label('date'),
+                func.sum(Bill.grand_total).label('total')
+            ).filter(
+                Bill.date_time >= start_date,
+                Bill.status == 'PAID'
+            ).group_by(
+                func.substr(Bill.date_time, 1, 10)
+            ).all()
+            
+            return {r.date: r.total for r in results}
+        finally:
+            session.close()
+
+    @staticmethod
+    def get_top_selling_products(limit=5):
+        """Get top selling products by quantity"""
+        session = get_db()
+        try:
+            from sqlalchemy import func, desc
+            results = session.query(
+                BillItem.product_name,
+                func.sum(BillItem.quantity).label('total_qty')
+            ).join(Bill).filter(
+                Bill.status == 'PAID'
+            ).group_by(
+                BillItem.product_name
+            ).order_by(
+                desc('total_qty')
+            ).limit(limit).all()
+            
+            return [{'name': r.product_name, 'qty': r.total_qty} for r in results]
+        finally:
+            session.close()
+
+    @staticmethod
+    def get_payment_method_stats():
+        """Get distribution of payment methods"""
+        session = get_db()
+        try:
+            from sqlalchemy import func
+            results = session.query(
+                Bill.payment_method,
+                func.count(Bill.id).label('count'),
+                func.sum(Bill.grand_total).label('total')
+            ).filter(
+                Bill.status == 'PAID'
+            ).group_by(
+                Bill.payment_method
+            ).all()
+            
+            return [{'method': r.payment_method or 'Unknown', 'count': r.count, 'total': r.total} for r in results]
+        finally:
+            session.close()
+
+    @staticmethod
+    def hold_bill(bill_data, items):
+        """Save bill with status 'HELD'"""
+        session = get_db()
+        try:
+            bill = Bill(
+                bill_number=bill_data['bill_number'],
+                customer_id=bill_data.get('customer_id'),
+                date_time=bill_data['date_time'],
+                subtotal=bill_data['subtotal'],
+                tax_percent=bill_data.get('tax_percent', 0),
+                tax_amount=bill_data.get('tax_amount', 0),
+                discount_amount=bill_data.get('discount_amount', 0),
+                grand_total=bill_data['grand_total'],
+                payment_method='Held',
+                status='HELD'
+            )
+            session.add(bill)
+            session.flush()
+
+            for item in items:
+                bill_item = BillItem(
+                    bill_id=bill.id,
+                    product_id=item['product_id'],
+                    product_name=item['product_name'],
+                    quantity=item['quantity'],
+                    unit=item['unit'],
+                    price=item['price'],
+                    total=item['total']
+                )
+                session.add(bill_item)
+            
+            session.commit()
+            return bill.id
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
+
+    @staticmethod
+    def get_held_bills():
+        """Get all held bills"""
+        session = get_db()
+        try:
+            bills = session.query(Bill).filter(Bill.status == 'HELD').all()
+            # Eager load items? For now just basic info, we load items when resuming
+            return [b.to_dict() for b in bills]
+        finally:
+            session.close()
+
+    @staticmethod
+    def get_bill_items(bill_id):
+        """Get items for a specific bill"""
+        session = get_db()
+        try:
+            items = session.query(BillItem).filter(BillItem.bill_id == bill_id).all()
+            return [{
+                'product_id': i.product_id,
+                'product_name': i.product_name,
+                'quantity': i.quantity,
+                'unit': i.unit,
+                'price': i.price,
+                'total': i.total
+            } for i in items]
+        finally:
+            session.close()
+
+    @staticmethod
+    def delete_bill(bill_id):
+        """Delete a bill (used when resuming a held bill)"""
+        session = get_db()
+        try:
+            bill = session.query(Bill).get(bill_id)
+            if bill:
+                session.delete(bill) # Cascade should delete items
+                session.commit()
+                return True
+            return False
+        except Exception:
+            session.rollback()
+            return False
+        finally:
+            session.close()
+
 class SettingsModel:
     @staticmethod
     def get_setting(key, default=None):

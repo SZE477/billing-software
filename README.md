@@ -1,62 +1,59 @@
 # Thangam Billing Software 🏪
 
-A robust, easy-to-use Point of Sale (POS) and billing application built with Python and PyQt6. 
+A robust, easy-to-use Point of Sale (POS) and billing application built with **Python** and **PyQt6**, designed for **Thangam Stores** and similar small to medium-sized retail businesses.
 
-**Note:** This project holds a special place in my heart as I originally built it to help my dad manage his store, "Thangam Stores". It is designed to be simple, fast, and reliable for small to medium-sized retail businesses.
+> **Note:** Originally built to assist my dad's store, this software emphasizes speed, simplicity, and reliability.
 
 ## ✨ Features
 
-*   **⚡ Fast Billing**:
-    *   Quick product search and addition to cart.
-    *   Barcode scanner support for rapid checkout.
-    *   Automatic tax and discount calculations.
-    *   Multiple payment modes (Cash, UPI, Card, Debt.).
-*   **📦 Product Management**:
-    *   Add, edit, and delete products easily.
-    *   Manage inventory and stock levels.
-    *   Support for different units of measurement.
-*   **👥 Customer Management**:
-    *   Maintain a customer database.
-    *   Quickly search and associate customers with bills.
-*   **🖨️ Versatile Printing**:
-    *   Support for Thermal Printers (USB, Serial, Network).
-    *   Customizable receipt formats.
-    *   Generates PDF reports using ReportLab.
-*   **📊 Reports & Analytics**:
-    *   View daily sales reports.
-    *   Export sales data for analysis.
-*   **⚙️ Configurable**:
-    *   Customize store details (Name, Address, Phone).
-    *   Configure printer settings directly from the app.
-*   **🎨 Modern UI**:
-    *   Clean and intuitive interface built with PyQt6.
-    *   Dark/Light mode support (if applicable, otherwise just "Clean Interface").
+### ⚡ Fast Billing
+- **Smart Search**: Quickly find products by name or code (shortcuts supported).
+- **Barcode Support**: Seamless integration with USB/Serial barcode scanners.
+- **Cart Management**: Hold/Resume bills, clear cart, and edit quantities on the fly.
+- **Multiple Payment Modes**: Cash, UPI, Card, and Debt tracking.
+
+### 📊 Dashboard & Analytics
+- **Visual Insights**: View sales trends, top-selling products, and payment method distribution charts.
+- **Reports**: Generate detailed sales reports by date range.
+- **Excel Export**: Export reports to `.xlsx` for further analysis.
+
+### 👥 Customer & Debt Management
+- **Customer Database**: Store client details and associate them with bills.
+- **Debt Tracking**: Manage pending payments and debt customers.
+
+### 🎨 Modern & Responsive UI
+- **Touch Mode**: Specialized mode with larger buttons and fonts for touch-screen monitors.
+- **Theming**: Toggle between Light and Dark themes.
+- **Keyboard Shortcuts**: Designed for power users (F1: Search, F2: Qty, F3: Discount, F12: Print).
+
+### 🖨️ Versatile Printing
+- **Format Support**: Thermal Receipt (80mm/58mm) and PDF generation.
+- **Branding**: Customizable Shop Logo and Header Message on receipts.
+- **Hardware Agnostic**: Works with Windows Drivers, Direct USB, Serial, or Network printers.
 
 ## 🛠️ Tech Stack
 
-*   **Language**: Python 3.10+
-*   **GUI Framework**: PyQt6
-*   **Database**: SQLite (Lightweight and serverless)
-*   **Printing**: python-escpos
-*   **Reporting**: ReportLab
-*   **Packaging**: PyInstaller
+- **Language**: Python 3.10+
+- **GUI**: PyQt6
+- **Database**: SQLAlchemy (SQLite)
+- **Analytics**: Matplotlib, Pandas
+- **Printing**: python-escpos, ReportLab
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-
-*   Python 3.10 or higher installed on your system.
-*   Git (to clone the repository).
+- Python 3.10 or higher.
+- Git.
 
 ### Installation
 
 1.  **Clone the Repository**
     ```bash
-    git clone https://github.com/SZE477/billing-software
+    git clone https://github.com/poneaswaran/billing-software
     cd thangam-billing
     ```
 
-2.  **Create a Virtual Environment (Recommended)**
+2.  **Create a Virtual Environment**
     ```bash
     python -m venv .venv
     # Windows
@@ -72,40 +69,37 @@ A robust, easy-to-use Point of Sale (POS) and billing application built with Pyt
 
 ### Running the Application
 
-To start the billing software, simply run:
+To start the billing software:
 
 ```bash
 python run.py
 ```
 
+## ⌨️ Keyboard Shortcuts
+
+| Key | Action |
+| :--- | :--- |
+| **F1** | Focus Customer Search |
+| **F2** | Focus Quantity Field |
+| **F3** | Focus Discount Field |
+| **F12** | Complete & Print Bill |
+| **Enter** | Add Product / Confirm |
+
 ## 📦 Building for Windows
 
-If you want to create a standalone `.exe` file to run on machines without Python installed:
+To generate a standalone `.exe`:
 
 ```bash
 pyinstaller --noconfirm --onefile --windowed --add-data "data;data" --add-data "app;app" --name "ThangamBilling" run.py
 ```
 
-The executable will be generated in the `dist/` folder.
-
 ## 🤝 Contributing
 
-Contributions are welcome! If you have ideas to make this better (or if you want to use it for your own family business), feel free to fork the repo and submit a pull request.
-
-1.  Fork the Project
-2.  Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3.  Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4.  Push to the Branch (`git push origin feature/AmazingFeature`)
-5.  Open a Pull Request
+Contributions are welcome! Fork the repo, create a branch, and submit a PR.
 
 ## 📄 License
 
 Distributed under the MIT License. See `LICENSE` for more information.
-
-## 🙏 Acknowledgements
-
-*   **My Dad**: For being the inspiration and the first user of this software.
-*   **Open Source Community**: For the amazing libraries that made this possible.
 
 ---
 *Built with ❤️ by Poneaswaran*

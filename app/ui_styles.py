@@ -416,7 +416,70 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
 }
 """
 
-def get_theme_style(theme_name):
+
+TOUCH_STYLE = """
+/* Touch Mode Enhancements */
+* {
+    font-size: 18px;
+}
+
+QPushButton {
+    padding: 15px 25px;
+    border-radius: 8px;
+    font-size: 18px;
+}
+
+QTableWidget {
+    font-size: 18px;
+}
+
+QHeaderView::section {
+    padding: 12px;
+    font-size: 18px;
+}
+
+QLineEdit, QComboBox, QDateEdit {
+    padding: 12px;
+    font-size: 18px;
+}
+
+QTabBar::tab {
+    padding: 15px 25px;
+    font-size: 18px;
+}
+
+QListWidget {
+    font-size: 18px;
+}
+
+QListWidget::item {
+    padding: 10px;
+}
+
+/* Larger scrollbars for touch */
+QScrollBar:vertical {
+    width: 25px;
+}
+
+QScrollBar::handle:vertical {
+    min-height: 40px;
+}
+
+QScrollBar:horizontal {
+    height: 25px;
+}
+
+QScrollBar::handle:horizontal {
+    min-width: 40px;
+}
+"""
+
+def get_theme_style(theme_name, touch_mode=False):
+    style = GLOBAL_STYLE
     if theme_name == 'Dark':
-        return DARK_THEME
-    return GLOBAL_STYLE
+        style = DARK_THEME
+    
+    if touch_mode:
+        style += TOUCH_STYLE
+        
+    return style

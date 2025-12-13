@@ -25,9 +25,25 @@ class SettingsDialog(QDialog):
         self.store_name = QLineEdit(SettingsModel.get_setting('store_name', 'Thangam Stores'))
         self.store_address = QLineEdit(SettingsModel.get_setting('store_address', ''))
         self.store_phone = QLineEdit(SettingsModel.get_setting('store_phone', ''))
+        
+        self.header_message = QLineEdit(SettingsModel.get_setting('header_message', ''))
+        self.header_message.setPlaceholderText("Message on top of receipt")
+        
+        # Logo
+        logo_row = QHBoxLayout()
+        self.logo_path = QLineEdit(SettingsModel.get_setting('shop_logo_path', ''))
+        self.logo_path.setPlaceholderText("Path to logo image...")
+        btn_browse_logo = QPushButton("Browse")
+        btn_browse_logo.clicked.connect(self.browse_logo)
+        logo_row.addWidget(self.logo_path)
+        logo_row.addWidget(btn_browse_logo)
+
         self.store_layout.addRow("Store Name:", self.store_name)
         self.store_layout.addRow("Address:", self.store_address)
         self.store_layout.addRow("Phone:", self.store_phone)
+        self.store_layout.addRow("Header Msg:", self.header_message)
+        self.store_layout.addRow("Logo:", logo_row)
+        
         self.store_tab.setLayout(self.store_layout)
         self.tabs.addTab(self.store_tab, "Store Info")
 
@@ -187,6 +203,11 @@ class SettingsDialog(QDialog):
         self.theme_combo.addItems(["Light", "Dark"])
         self.theme_combo.setCurrentText(SettingsModel.get_setting('theme', 'Light'))
         self.appearance_layout.addRow("Theme:", self.theme_combo)
+        
+        self.touch_mode = QCheckBox("Enable Touch Screen Mode (Larger UI)")
+        self.touch_mode.setChecked(SettingsModel.get_setting('touch_mode', 'false').lower() == 'true')
+        self.appearance_layout.addRow(self.touch_mode)
+        
         self.appearance_tab.setLayout(self.appearance_layout)
         self.tabs.addTab(self.appearance_tab, "Appearance")
 
@@ -298,10 +319,18 @@ class SettingsDialog(QDialog):
 
         self.setLayout(layout)
 
+    def browse_logo(self):
+        from PyQt6.QtWidgets import QFileDialog
+        filename, _ = QFileDialog.getOpenFileName(self, "Select Logo", "", "Images (*.png *.jpg *.bmp)")
+        if filename:
+            self.logo_path.setText(filename)
+
     def save_settings(self):
         SettingsModel.set_setting('store_name', self.store_name.text())
         SettingsModel.set_setting('store_address', self.store_address.text())
         SettingsModel.set_setting('store_phone', self.store_phone.text())
+        SettingsModel.set_setting('header_message', self.header_message.text())
+        SettingsModel.set_setting('shop_logo_path', self.logo_path.text())
         
         SettingsModel.set_setting('printer_type', self.printer_type.currentText())
         SettingsModel.set_setting('windows_printer_name', self.windows_printer_combo.currentText())
@@ -322,6 +351,7 @@ class SettingsDialog(QDialog):
         SettingsModel.set_setting('smtp_pass', self.smtp_pass.text())
         
         SettingsModel.set_setting('theme', self.theme_combo.currentText())
+        SettingsModel.set_setting('touch_mode', str(self.touch_mode.isChecked()).lower())
 
         # Save Barcode Scanner settings
         SettingsModel.set_setting('scanner_type', self.scanner_type.currentText())

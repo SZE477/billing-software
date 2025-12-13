@@ -253,6 +253,50 @@ class PaymentDialog(QDialog):
         else:
             self.accept()
 
+from app.ui_dashboard import DashboardWidget
+
+class HeldBillsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Held Bills")
+        self.resize(600, 400)
+        self.selected_bill = None
+        self.init_ui()
+        self.load_bills()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+        self.table = QTableWidget()
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["Bill No", "Customer", "Time", "Amount"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.cellDoubleClicked.connect(self.resume_bill)
+        layout.addWidget(self.table)
+
+        btn_resume = QPushButton("Resume Selected")
+        btn_resume.clicked.connect(self.resume_bill)
+        layout.addWidget(btn_resume)
+        
+        self.setLayout(layout)
+
+    def load_bills(self):
+        self.bills = BillModel.get_held_bills()
+        self.table.setRowCount(len(self.bills))
+        for row, bill in enumerate(self.bills):
+            self.table.setItem(row, 0, QTableWidgetItem(bill['bill_number']))
+            self.table.setItem(row, 1, QTableWidgetItem(bill['customer_name'] or "Walk-in"))
+            self.table.setItem(row, 2, QTableWidgetItem(bill['date_time']))
+            self.table.setItem(row, 3, QTableWidgetItem(f"₹{bill['grand_total']:.2f}"))
+            self.table.item(row, 0).setData(Qt.ItemDataRole.UserRole, bill['id'])
+
+    def resume_bill(self):
+        row = self.table.currentRow()
+        if row >= 0:
+            bill_id = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+            self.selected_bill = next((b for b in self.bills if b['id'] == bill_id), None)
+            self.accept()
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -266,7 +310,25 @@ class MainWindow(QMainWindow):
         self.load_customers()
         self.load_recent_bills()
 
+        # Keyboard Shortcuts
+        self.shortcut_f1 = QAction("Focus Search", self)
+        self.shortcut_f1.setShortcut("F1")
+        self.shortcut_f1.triggered.connect(self.focus_search)
+        self.addAction(self.shortcut_f1)
+
+        self.shortcut_f2 = QAction("Focus Qty", self)
+        self.shortcut_f2.setShortcut("F2")
+        self.shortcut_f2.triggered.connect(self.qty_input.setFocus)
+        self.addAction(self.shortcut_f2)
+
+        self.shortcut_f3 = QAction("Focus Discount", self)
+        self.shortcut_f3.setShortcut("F3")
+        self.shortcut_f3.triggered.connect(self.discount_input.setFocus)
+        self.addAction(self.shortcut_f3)
+
     def init_ui(self):
+        from PyQt6.QtWidgets import QTabWidget
+        
         # ... (menu code)
         menubar = self.menuBar()
         file_menu = menubar.addMenu("File")
@@ -283,10 +345,21 @@ class MainWindow(QMainWindow):
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
-        # Main Layout
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QHBoxLayout(central_widget)
+        # Tabs
+        self.tabs = QTabWidget()
+        self.setCentralWidget(self.tabs)
+
+        # Tab 1: Billing
+        self.billing_tab = QWidget()
+        self.init_billing_tab()
+        self.tabs.addTab(self.billing_tab, "Billing")
+
+        # Tab 2: Dashboard
+        self.dashboard_tab = DashboardWidget()
+        self.tabs.addTab(self.dashboard_tab, "Dashboard")
+
+    def init_billing_tab(self):
+        main_layout = QHBoxLayout(self.billing_tab)
         main_layout.setSpacing(20)
         main_layout.setContentsMargins(20, 20, 20, 20)
 
@@ -300,7 +373,7 @@ class MainWindow(QMainWindow):
         cust_layout.setContentsMargins(0, 0, 0, 0)
         
         self.cust_search = QLineEdit()
-        self.cust_search.setPlaceholderText("🔍 Search Customer (Name/Phone)...")
+        self.cust_search.setPlaceholderText("🔍 Search Customer (Name/Phone)... [F1]")
         self.cust_completer = QCompleter()
         self.cust_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.cust_completer.setFilterMode(Qt.MatchFlag.MatchContains)
@@ -333,7 +406,7 @@ class MainWindow(QMainWindow):
         self.prod_search.returnPressed.connect(self.add_product_to_cart_manual)
         
         self.qty_input = QLineEdit("1")
-        self.qty_input.setPlaceholderText("Qty")
+        self.qty_input.setPlaceholderText("Qty [F2]")
         self.qty_input.setFixedWidth(60)
         self.qty_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.qty_input.returnPressed.connect(self.add_product_to_cart_manual)
@@ -368,7 +441,7 @@ class MainWindow(QMainWindow):
         self.lbl_tax.setAlignment(Qt.AlignmentFlag.AlignRight)
         
         self.discount_input = QLineEdit("0")
-        self.discount_input.setPlaceholderText("%")
+        self.discount_input.setPlaceholderText("% [F3]")
         self.discount_input.setFixedWidth(50)
         self.discount_input.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.discount_input.textChanged.connect(self.update_cart_table)
@@ -389,6 +462,11 @@ class MainWindow(QMainWindow):
 
         # Actions
         actions_layout = QHBoxLayout()
+        btn_hold = QPushButton("Hold Bill")
+        btn_hold.setStyleSheet("background-color: #FFC107; color: black;")
+        btn_hold.setMinimumHeight(50)
+        btn_hold.clicked.connect(self.hold_bill)
+
         btn_clear = QPushButton("Clear Bill")
         btn_clear.setObjectName("dangerBtn")
         btn_clear.setMinimumHeight(50)
@@ -399,6 +477,7 @@ class MainWindow(QMainWindow):
         btn_print.setMinimumHeight(50)
         btn_print.clicked.connect(self.process_bill)
         
+        actions_layout.addWidget(btn_hold)
         actions_layout.addWidget(btn_clear)
         actions_layout.addWidget(btn_print, 2)
         billing_layout.addLayout(actions_layout)
@@ -407,6 +486,12 @@ class MainWindow(QMainWindow):
         sidebar_layout = QVBoxLayout()
         sidebar_layout.setSpacing(15)
         
+        # Resume Bill Button
+        self.btn_resume = QPushButton("📄 Resume Held Bill")
+        self.btn_resume.setStyleSheet("background-color: #2196F3; color: white;")
+        self.btn_resume.clicked.connect(self.resume_held_bill)
+        sidebar_layout.addWidget(self.btn_resume)
+
         # Quick Products
         lbl_quick = QLabel("⚡ Quick Products")
         lbl_quick.setObjectName("sectionHeader")
@@ -468,6 +553,62 @@ class MainWindow(QMainWindow):
         # Shortcuts
         QAction("Print", self, shortcut=QKeySequence("F12"), triggered=self.process_bill)
 
+    def focus_search(self):
+        self.cust_search.setFocus()
+        self.cust_search.selectAll()
+
+    def hold_bill(self):
+        if not self.cart:
+            show_error(self, "Empty Cart", "Cannot hold an empty bill.")
+            return
+
+        grand_total = float(self.lbl_grand_total.text().replace('₹', ''))
+        bill_data = {
+            'bill_number': generate_bill_number(),
+            'customer_id': self.current_customer['id'] if self.current_customer else None,
+            'subtotal': float(self.lbl_subtotal.text().replace('₹', '')),
+            'grand_total': grand_total,
+            'discount_amount': float(self.lbl_discount_amt.text().replace('₹', '')),
+            'date_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        try:
+            BillModel.hold_bill(bill_data, self.cart)
+            show_info(self, "Bill Held", "Bill has been put on hold.")
+            self.clear_cart()
+        except Exception as e:
+            show_error(self, "Error", f"Failed to hold bill: {e}")
+
+    def resume_held_bill(self):
+        dlg = HeldBillsDialog(self)
+        if dlg.exec() and dlg.selected_bill:
+            bill = dlg.selected_bill
+            
+            # Load Customer
+            if bill['customer_id']:
+                # Would be better to fetch customer details, but for now we might have them in result if we joined
+                # Re-fetching just to be safe or simple assignment if name/phone is enough
+                self.current_customer = {
+                    'id': bill['customer_id'],
+                    'name': bill.get('customer_name', 'Unknown'),
+                    'phone': bill.get('customer_phone', '')
+                }
+                self.lbl_cust.setText(f"{self.current_customer['name']} ({self.current_customer['phone']})")
+                self.cust_search.clear()
+            else:
+                self.current_customer = None
+                self.lbl_cust.setText("Walk-in Customer")
+                
+            # Load Items
+            items = BillModel.get_bill_items(bill['id'])
+            self.cart = items
+            
+            # Delete the held bill to avoid dupes logic (as per plan)
+            BillModel.delete_bill(bill['id'])
+            
+            self.update_cart_table()
+            show_info(self, "Resumed", "Bill resumed successfully.")
+
     def load_products(self):
         self.products = ProductModel.get_all_products()
         names = [f"{p['name']} ({p['code']})" for p in self.products]
@@ -494,6 +635,8 @@ class MainWindow(QMainWindow):
                 self.current_customer = c
                 self.lbl_cust.setText(f"{c['name']} ({c['phone']})")
                 self.cust_search.clear()
+                # Auto focus product search after resolving customer
+                self.prod_search.setFocus()
                 return
 
         customers = CustomerModel.search_customer(query)
@@ -503,6 +646,7 @@ class MainWindow(QMainWindow):
             self.current_customer = c
             self.lbl_cust.setText(f"{c['name']} ({c['phone']})")
             self.cust_search.clear()
+            self.prod_search.setFocus()
         else:
             show_info(self, "Not Found", "Customer not found.")
 
@@ -515,6 +659,7 @@ class MainWindow(QMainWindow):
                     self.current_customer = c
                     self.lbl_cust.setText(f"{c['name']} ({c['phone']})")
                     self.cust_search.clear()
+                    self.prod_search.setFocus()
                     break
 
     def add_customer(self):
@@ -572,6 +717,14 @@ class MainWindow(QMainWindow):
         except ValueError:
             qty = 1.0
         
+        # Check if product already exists in cart
+        for item in self.cart:
+            if item['product_id'] == product['id']:
+                item['quantity'] += qty
+                item['total'] = item['quantity'] * item['price']
+                self.update_cart_table()
+                return
+
         total = qty * product['price_per_unit']
         
         self.cart.append({
@@ -679,7 +832,7 @@ class MainWindow(QMainWindow):
 
                 self.clear_cart()
                 self.load_recent_bills()
-                # show_info(self, "Success", "Bill processed successfully!") # Preview dialog handles success msg if printed
+                # Dashboard might need update if active, but let's leave it to manual refresh or when tab switched
             except Exception as e:
                 show_error(self, "Error", f"Failed to process bill: {e}")
 
@@ -690,7 +843,8 @@ class MainWindow(QMainWindow):
             from app.models import SettingsModel
             from app.ui_styles import get_theme_style
             theme = SettingsModel.get_setting('theme', 'Light')
-            QApplication.instance().setStyleSheet(get_theme_style(theme))
+            touch_mode = SettingsModel.get_setting('touch_mode', 'false').lower() == 'true'
+            QApplication.instance().setStyleSheet(get_theme_style(theme, touch_mode))
 
     def show_debt_customers(self):
         """Show dialog with customers who have pending debt"""
