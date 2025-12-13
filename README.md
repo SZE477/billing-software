@@ -90,7 +90,19 @@ python run.py
 To generate a standalone `.exe`:
 
 ```bash
-pyinstaller --noconfirm --onefile --windowed --add-data "data;data" --add-data "app;app" --name "ThangamBilling" run.py
+pyinstaller --noconfirm --onefile --windowed ^
+    --add-data "data;data" ^
+    --add-data "app;app" ^
+    --add-data ".venv/Lib/site-packages/escpos/capabilities.json;escpos" ^
+    --hidden-import "reportlab.graphics.barcode.code93" ^
+    --hidden-import "reportlab.graphics.barcode.code128" ^
+    --hidden-import "reportlab.graphics.barcode.code39" ^
+    --hidden-import "reportlab.graphics.barcode.usps" ^
+    --hidden-import "reportlab.graphics.barcode.qr" ^
+    --hidden-import "reportlab.graphics.barcode.common" ^
+    --hidden-import "reportlab.graphics.barcode.usps4s" ^
+    --hidden-import "reportlab.graphics.barcode.ecc200datamatrix" ^
+    --name "ThangamBilling" run.py
 ```
 
 ## 🤝 Contributing

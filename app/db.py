@@ -1,10 +1,39 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, DateTime, Text
-from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
 import os
-from datetime import datetime
+import sys
+import shutil
 
 Base = declarative_base()
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'thangam.db')
+
+def get_db_path():
+    if getattr(sys, 'frozen', False):
+        # Running as compiled executable
+        # Use a 'data' folder next to the executable for persistence
+        base_dir = os.path.dirname(sys.executable)
+        data_dir = os.path.join(base_dir, 'data')
+        db_path = os.path.join(data_dir, 'thangam.db')
+        
+        # Create persistent data directory if it doesn't exist
+        os.makedirs(data_dir, exist_ok=True)
+        
+        # If DB doesn't exist in persistent location, try to copy from bundled source
+        if not os.path.exists(db_path):
+            try:
+                # sys._MEIPASS is where PyInstaller unpacks bundled files
+                bundled_db = os.path.join(sys._MEIPASS, 'data', 'thangam.db')
+                if os.path.exists(bundled_db):
+                    shutil.copy2(bundled_db, db_path)
+            except Exception as e:
+                print(f"Error copying bundled DB: {e}")
+                pass
+                
+        return db_path
+    else:
+        # Running from source
+        return os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'thangam.db')
+
+DB_PATH = get_db_path()
 engine = create_engine(f'sqlite:///{DB_PATH}', echo=False)
 Session = sessionmaker(bind=engine)
 
@@ -12,11 +41,7 @@ def get_db():
     return Session()
 
 def init_db():
+    # Ensure directory exists (redundant for frozen path but good for source)
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     Base.metadata.create_all(engine)
 
-# Define Models directly here to avoid circular imports if we were to separate them, 
-# but typically they go in models.py. However, since models.py currently holds the *logic* 
-# (DAO pattern), we will define the ORM classes here or in a new file. 
-# To keep it clean, let's put the ORM class definitions in a new file `app/orm_models.py` 
-# and keep `app/db.py` for connection setup.

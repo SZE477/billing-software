@@ -130,7 +130,7 @@ dmypy.json
 
 # pytype static type analyzer
 .pytype/
-
+*Release_notes/
 # Cython debug symbols
 cython_debug/
 
